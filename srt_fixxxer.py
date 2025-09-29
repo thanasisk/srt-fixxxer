@@ -63,7 +63,10 @@ def process_ts(initial: datetime.datetime, offset:int ) -> str:
     t_start = extract_timestamp(initial, tformat_start_re)
     t_end = extract_timestamp(initial, tformat_end_re)
     delta = datetime.timedelta(seconds = offset)
-    return f"{t_start + delta} --> {t_end + delta}"
+    duration = datetime.timedelta(seconds = 3)
+    printable_start = (t_start + delta).strftime("%H:%M:%S,%f")
+    printable_end = (t_start + delta + duration).strftime("%H:%M:%S,%f")
+    return f"{printable_start[:-3]} --> {printable_end[:-3]}"
 
 if __name__ == '__main__':
     sys.exit(main())
