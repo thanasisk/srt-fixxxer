@@ -4,7 +4,7 @@
 __author__ = "Athanasios Kostopoulos"
 __copyright__ = "Copyright 2025, Athanasios Kostopoulos"
 __license__ = "MIT"
-__version__ = "0.2"
+__version__ = "0.3"
 __maintainer__ = "Athanasios Kostopoulos"
 __email__ = "athanasios@akostopoulos.com"
 
@@ -22,8 +22,6 @@ from xai_sdk import AsyncClient
 from xai_sdk.chat import user, system
 
 TIMESTAMP_RE = re.compile(r'\d\d:\d\d:\d\d,\d\d\d --> \d\d:\d\d:\d\d,\d\d\d')
-BSZ = 20
-CONNSZ = 10
 
 def main() -> None:
     """
@@ -33,32 +31,52 @@ def main() -> None:
     argparser.add_argument("-o","--offset", help="positive or negative offset in seconds",type=int)
     argparser.add_argument("-i","--input", help=".srt file to process",
                            type=argparse.FileType("r", encoding="utf-8"))
-    argparser.add_argument("-t","--translate",type=str,default='el')
+    argparser.add_argument("-l","--language",type=str,default='el')
+    argparser.add_argument("-b","--batch",type=int,default=20,help='batch size to speed up things')
+    argparser.add_argument("-p","--parallel",type=int,default=10,help="parallel batch processors")
     args = argparser.parse_args()
     if args.offset:
         adjust_timestamp(args.input.name, args.offset)
-    if args.translate:
+    if args.language:
         print('[*] Translating')
-        asyncio.run(translate_srt(args.input.name,args.translate))
+        asyncio.run(translate_srt(args.input.name,args.language, args.batch, args.parallel))
 
 # entry point for .srt translation
-async def translate_srt(input_file, lang):
+async def translate_srt(input_file, lang: str, batch_sz: int, conns: int) -> None:
+    translations = []
     subtitles = parse_srt(input_file)
     print('[*] Sending lines for translation')
-    translations = await translate_lines(subtitles, batch_size=BSZ)
+    translations_raw = await translate_lines(subtitles, batch_size=batch_sz, lang=lang, conns=conns)
+    assert len(translations_raw) > 0, "[*] translations are empty!"
+    for t_raw in translations_raw:
+        translations.append(t_raw.result())
+    # list_dict = [ { “num” =3, “name” = “A”}, {“num” = 1, “country” = “Europe”}]
+    # sort_num = sorted(list_dict, key = lambda x : x[“num”])
+    # FIXME: translation[0] only gives partial results
+    translations = sorted(translations, key=lambda translation: translation[0]['idx'])
+    assert len(translations) > 0, "[*] translations(sorted) are empty!"
+    # translated_subtitles = [(index, timestamp, trans) for (index, timestamp, _), trans in zip(subtitles, translations)]
     # Combine subtitles with translations
-    with open("output.srt",'w') as ofile:
+    output_fname = f"output.{lang}.srt"
+    with open(output_fname,'w') as ofile:
         for translation in translations:
-            ofile.write(translation['idx'])
-            print(translation['idx'])
-            ofile.write(translation['ts'])
-            print(translation['ts'])
-            ofile.write(translation['msg'].lstrip().rstrip())
-            print(translation['msg'].lstrip().rstrip())
+            for cand in translation:
+                ofile.write(cand['idx'])
+                ofile.write("\n")
+                print(cand['idx'])
+                ofile.write(cand['ts'])
+                ofile.write("\n")
+                print(cand['ts'])
+                ofile.write(cand['msg'].lstrip().rstrip())
+                ofile.write("\n")
+                ofile.write("\n")
+                print(cand['msg'].lstrip().rstrip())
 
 
 # Process lines in batches asynchronously
-async def translate_lines(lines, batch_size=BSZ):
+async def translate_lines(lines: list, batch_size: int, lang: str, conns: int) -> list:
+    assert conns > 0, "parallel is less than 1"
+    assert batch_size > 0, "batch_size is less than 1"
     client = AsyncClient(
         api_key=os.getenv("XAI"),
         timeout=3600,
@@ -67,11 +85,11 @@ async def translate_lines(lines, batch_size=BSZ):
     print('[*] Split lines into batches')
     batches = [lines[i:i + batch_size] for i in range(0, len(lines), batch_size)]
     print(f'[*] {len(batches)} batches created')
-    semaphore = asyncio.Semaphore(CONNSZ)  # Limit concurrent requests to avoid rate limits
+    semaphore = asyncio.Semaphore(conns)  # Limit concurrent requests to avoid rate limits
     # FIXME Bug candidate
-    async def process_batch(batch):
+    async def process_batch(batch: list):
         async with semaphore:
-            return await translate_batch(client, batch)
+            return await translate_batch(client, batch, lang)
 
     # Run batches concurrently
     print('[*] Creating tasks')
@@ -82,21 +100,38 @@ async def translate_lines(lines, batch_size=BSZ):
         for task in tasks:
             results.append(tg.create_task(task))
     print("[*] Tasks completed")
-#   results = await asyncio.gather(*tasks, return_exceptions=True)
-#   print('[*] Got results from asyncio.gather')
+    assert len(results) > 0, "translate_lines: results is less than 1"
+    print(f"[*] Results: {len(results)}")
     for batch_result in results:
         if isinstance(batch_result, Exception):
             print(f"[*] Error in batch: {batch_result}")
         else:
+            # woz: extend
+            # perhaps here is the bug ...
             translations.extend(batch_result)
+    assert len(translations) > 0, "Translations in translate_lines are less than 1"
+    print(f"[*] Translations in translate_lines: {len(translations)}")
     return translations
 
-async def translate_batch(client, lines: list) -> list:
+async def translate_batch(client: xai_sdk.aio.client.Client, lines: list, lang: str) -> list:
     print(f'[*] translating batch of {len(lines)}')
     print("[*] creating chat")
+    languages = {
+        "el": "colloquial Greek from South-West Peloponesse region",
+        "kr": "Cretan dialect of Greek",
+        "pt": "Ponti formc Greek",
+        "bn": "βλαχικα form of Greek",
+        "cl": "Katharevousa form of Greek",
+        "re": "redneck US English",
+        "gg": "late 80s/early 90s gangsta rap English",
+        "tv": "80s Greek slang, made infamous from VHS of the era",
+        "co": "modern corporate US English"
+            }
+    # TODO: error checking
+    language = languages[lang]
     chat = client.chat.create(
         model="grok-4",
-        messages=[system("Translate to Colloquial Greek, keeping text concise for subtitles so it can be copied and pasted")],
+        messages=[system(f"Translate to {language}, keeping text concise for subtitles so it can be copied and pasted")],
         temperature=0.3  # Low temperature for precise translations
     )
     translated = []
@@ -111,7 +146,7 @@ async def translate_batch(client, lines: list) -> list:
     return translated
 
 def parse_srt(fname: str) -> list:
-    print('[*] Parsing .srt')
+    print(f'[*] Parsing {fname}')
     translations = []
     with open(fname,"r") as ifile:
         ts = ""
@@ -128,7 +163,7 @@ def parse_srt(fname: str) -> list:
             elif line == "":
                 # this serves as our construct object-ish block
                 msgs.append("")
-                # possible bug in join
+                # possible bug in join - should it be "\n" or ""
                 translations.append({'ts': ts, 'idx': idx, 'msg': "\n".join(msgs)})
                 msgs = []
                 continue
