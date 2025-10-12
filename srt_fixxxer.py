@@ -50,8 +50,9 @@ def main() -> None:
     argparser.add_argument(
         "-p", "--parallel", type=int, default=10, help="parallel batch processors"
     )
-    argparser.add_argument("-a", "--ai", type=str, default="xai", help="AI provider")
+    argparser.add_argument("-a", "--ai", type=str, default="nullAI", help="AI provider")
     args = argparser.parse_args()
+    # TODO: make it conditional
     logging.basicConfig(filename="srt_fixxer.log", level=logging.DEBUG)
     logger.info("Started")
     if args.offset:
@@ -82,7 +83,7 @@ async def translate_srt(
     subtitles = parse_srt(input_file)
     logger.debug("[*] Sending lines for translation")
     translations_raw = await translate_lines(
-        subtitles, batch_size=batch_sz, lang=lang, conns=conns
+        subtitles, batch_size=batch_sz, lang=lang, conns=conns, ai=ai
     )
     assert len(translations_raw) > 0, "[*] translations_raw are empty!"
     for t_raw in translations_raw:
@@ -123,15 +124,46 @@ async def translate_srt(
                 ofile.write("\n")
                 logger.debug(cand["msg"].lstrip().rstrip())
 
-
+def mock_create():
+    pass
+def mock_sample():
+    pass
+def mock_append():
+    pass
 # Process lines in batches asynchronously
-async def translate_lines(lines: list, batch_size: int, lang: str, conns: int) -> list:
+async def translate_lines(lines: list, batch_size: int, lang: str, conns: int, ai: str) -> list:
     assert conns > 0, "parallel is less than 1"
     assert batch_size > 0, "batch_size is less than 1"
-    client = AsyncClient(
-        api_key=os.getenv("XAI"),
-        timeout=3600,
-    )
+    # allowed_AIs = ["xAI", "openAI", "nullAI"]
+    #match ai.decode('utf-8').lower():
+    match ai.lower():
+        case "xai":
+            client = AsyncClient(
+            api_key=os.getenv("XAI"),
+            timeout=3600, # Override default timeout with longer timeout for reasoning models
+            )
+            pass
+        case "nullai":
+            """
+                def __init__(self):
+        from types import MethodType
+
+        steps = ["dev", "stage", "prod"]
+        for step in steps:
+
+            env_setter = self.make_env_setter(step)
+
+            method = MethodType(env_setter, self)
+            setattr(self, step, method)
+            """
+            chat = type("chat")
+            setattr(chat, "create", mock_create)
+            setattr(chat, "sample", mock_sample)
+            setattr(chat, "append", mock_append)
+            client = type("nullAI", {"chat": chat})
+        case _:
+            logger.critical(f"{ai} is NOT supported - Exiting!")
+            sys.exit(1)
     translations = []
     logger.debug("[*] Split lines into batches")
     batches = [lines[i : i + batch_size] for i in range(0, len(lines), batch_size)]
@@ -172,7 +204,7 @@ async def translate_lines(lines: list, batch_size: int, lang: str, conns: int) -
 
 
 async def translate_batch(
-    client: xai_sdk.aio.client.Client, lines: list, lang: str
+    client, lines: list, lang: str
 ) -> list:
     languages = {
         "el": "regular modern Greek",
