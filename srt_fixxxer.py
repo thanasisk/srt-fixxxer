@@ -34,32 +34,38 @@ def main() -> None:
     argparser.add_argument("-l","--language",type=str,default='el')
     argparser.add_argument("-b","--batch",type=int,default=20,help='batch size to speed up things')
     argparser.add_argument("-p","--parallel",type=int,default=10,help="parallel batch processors")
+    argparser.add_argument("-a", "--ai",type=str,default="xai",help="AI provider")
     args = argparser.parse_args()
     if args.offset:
+        # TODO: currently uses tee(1) - make the change in place?
         adjust_timestamp(args.input.name, args.offset)
     if args.language:
         print('[*] Translating')
-        asyncio.run(translate_srt(args.input.name,args.language, args.batch, args.parallel))
+        asyncio.run(translate_srt(args.input.name,args.language, args.batch, args.parallel, args.ai))
 
 # entry point for .srt translation
-async def translate_srt(input_file, lang: str, batch_sz: int, conns: int) -> None:
+async def translate_srt(input_file, lang: str, batch_sz: int, conns: int, ai:str) -> None:
     translations = []
     subtitles = parse_srt(input_file)
     print('[*] Sending lines for translation')
     translations_raw = await translate_lines(subtitles, batch_size=batch_sz, lang=lang, conns=conns)
-    assert len(translations_raw) > 0, "[*] translations are empty!"
+    assert len(translations_raw) > 0, "[*] translations_raw are empty!"
     for t_raw in translations_raw:
         translations.append(t_raw.result())
     # list_dict = [ { “num” =3, “name” = “A”}, {“num” = 1, “country” = “Europe”}]
     # sort_num = sorted(list_dict, key = lambda x : x[“num”])
     # FIXME: translation[0] only gives partial results
     translations = sorted(translations, key=lambda translation: translation[0]['idx'])
+    with open("translate_srt_translate.pcl","w") as picklefile:
+        picklefile.write(pickle.dumps(translations))
     assert len(translations) > 0, "[*] translations(sorted) are empty!"
     # translated_subtitles = [(index, timestamp, trans) for (index, timestamp, _), trans in zip(subtitles, translations)]
     # Combine subtitles with translations
-    output_fname = f"output.{lang}.srt"
+    output_fname = f"output.{ai}.{lang}.srt"
     with open(output_fname,'w') as ofile:
-        for translation in translations:
+        for idx,translation in translations:
+            with open(f"translation-{idx}.pcl","w") as picklefile:
+                picklefile.write(pickle.dumps(tranlation))
             for cand in translation:
                 ofile.write(cand['idx'])
                 ofile.write("\n")
@@ -117,7 +123,8 @@ async def translate_batch(client: xai_sdk.aio.client.Client, lines: list, lang: 
     print(f'[*] translating batch of {len(lines)}')
     print("[*] creating chat")
     languages = {
-        "el": "colloquial Greek from South-West Peloponesse region",
+        "el": "regular modern Greek",
+        "il": "colloquial Greek from South-West Peloponesse region of Ilia",
         "kr": "Cretan dialect of Greek",
         "pt": "Ponti formc Greek",
         "bn": "βλαχικα form of Greek",
