@@ -17,16 +17,35 @@ import datetime
 import asyncio
 import pickle
 import logging
+from functools import wraps # This convenience func preserves name and docstring
 
 from dateutil import parser
 
-import xai_sdk
+#import xai_sdk
 from xai_sdk import AsyncClient
 from xai_sdk.chat import user, system
 
 TIMESTAMP_RE = re.compile(r"\d\d:\d\d:\d\d,\d\d\d --> \d\d:\d\d:\d\d,\d\d\d")
 logger = logging.getLogger(__name__)
 
+class nullAI:
+    def __init__(self, chat):
+        self.chat = chat
+
+class ChatResponse:
+    def __init__(self, content):
+        self.content = content
+    def append(self, extra):
+        self.content += str(extra)
+    async def sample(self):
+        return self.content
+
+class chat:
+    def __init__(self):
+        self.response = ChatResponse("FIXED RESPONSE")  # Now it's properly initialized
+
+    def create(self,model,messages,temperature):
+        return self.response
 
 def main() -> None:
     """
@@ -51,19 +70,25 @@ def main() -> None:
         "-p", "--parallel", type=int, default=10, help="parallel batch processors"
     )
     argparser.add_argument("-a", "--ai", type=str, default="nullAI", help="AI provider")
+    argparser.add_argument("-v", "--verbose", action="store_true", help="be more verbose\ncreates pickles")
+    argparser.add_argument("-q", "--quiet", action="store_true", help="reduce verbosity")
     args = argparser.parse_args()
     # TODO: make it conditional
-    logging.basicConfig(filename="srt_fixxer.log", level=logging.DEBUG)
+    if args.verbose: 
+        logging.basicConfig(filename="fixxxer.log", level=logging.DEBUG)
+    elif args.quiet:
+        logging.basicConfig(filename="fixxxer.log", level=logging.CRITICAL)
+    else:
+        logging.basicConfig(filename="fixxxer.log", level=logging.INFO)
     logger.info("Started")
     if args.offset:
         # TODO: currently uses tee(1) - make the change in place?
         adjust_timestamp(args.input.name, args.offset)
     if args.language:
         logger.info("[*] Translating")
-        asyncio.run(
+    asyncio.run(
             translate_srt(
-                args.input.name, args.language, args.batch, args.parallel, args.ai
-            )
+                args.input.name, args.language, args.batch, args.parallel, args.ai)
         )
 
 
@@ -144,23 +169,7 @@ async def translate_lines(lines: list, batch_size: int, lang: str, conns: int, a
             )
             pass
         case "nullai":
-            """
-                def __init__(self):
-        from types import MethodType
-
-        steps = ["dev", "stage", "prod"]
-        for step in steps:
-
-            env_setter = self.make_env_setter(step)
-
-            method = MethodType(env_setter, self)
-            setattr(self, step, method)
-            """
-            chat = type("chat")
-            setattr(chat, "create", mock_create)
-            setattr(chat, "sample", mock_sample)
-            setattr(chat, "append", mock_append)
-            client = type("nullAI", {"chat": chat})
+            client = nullAI(chat=chat())
         case _:
             logger.critical(f"{ai} is NOT supported - Exiting!")
             sys.exit(1)
@@ -195,9 +204,10 @@ async def translate_lines(lines: list, batch_size: int, lang: str, conns: int, a
             # woz: extend
             # perhaps here is the bug ...
             translations.extend(batch_result)
-    with open(f"translations.pcl","w") as picklefile:
+    translations_pickle = "translations.pcl"
+    with open(f"{translations_pickle}","w") as picklefile:
         picklefile.write(pickle.dumps(translations))
-        logger.debug(f"picklefile written")
+        logger.debug(f"picklefile written: {translations_pickle}")
     assert len(translations) > 0, "Translations in translate_lines are less than 1"
     logger.debug(f"[*] Translations in translate_lines: {len(translations)}")
     return translations
@@ -309,6 +319,15 @@ def process_ts(initial: datetime.datetime, offset: int) -> str:
     printable_start = (t_start + delta).strftime("%H:%M:%S,%f")
     printable_end = (t_start + delta + duration).strftime("%H:%M:%S,%f")
     return f"{printable_start[:-3]} --> {printable_end[:-3]}"
+
+def add_method(cls):
+    def decorator(func):
+        @wraps(func) 
+        def wrapper(self, *args, **kwargs): 
+            return func(*args, **kwargs)
+        setattr(cls, func.__name__, wrapper)
+        return func # returning func means func can still be used normally
+    return decorator
 
 
 if __name__ == "__main__":
