@@ -21,11 +21,11 @@ from functools import wraps # This convenience func preserves name and docstring
 
 from dateutil import parser
 
-#import xai_sdk
 from xai_sdk import AsyncClient
-from xai_sdk.chat import user, system
+#from ai_imports import load_ai_engine
+#from ai_imports import load_ai_engine, user, system, nullAI
+import ai_imports
 
-from nullAI import nullAI
 TIMESTAMP_RE = re.compile(r"\d\d:\d\d:\d\d,\d\d\d --> \d\d:\d\d:\d\d,\d\d\d")
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ def main() -> None:
     argparser.add_argument(
         "-p", "--parallel", type=int, default=10, help="parallel batch processors"
     )
-    argparser.add_argument("-a", "--ai", type=str, default="nullAI", help="AI provider")
+    argparser.add_argument("-e", "--engine", type=str, help="AI provider")
     argparser.add_argument("-v", "--verbose", action="store_true", help="be more verbose\ncreates pickles")
     argparser.add_argument("-q", "--quiet", action="store_true", help="reduce verbosity")
     args = argparser.parse_args()
@@ -61,15 +61,18 @@ def main() -> None:
         logging.basicConfig(filename="fixxxer.log", level=logging.CRITICAL)
     else:
         logging.basicConfig(filename="fixxxer.log", level=logging.INFO)
+    console_handler = logging.StreamHandler(sys.stdout)
+    logger.addHandler(console_handler)
     logger.info("Started")
     if args.offset:
         # TODO: currently uses tee(1) - make the change in place?
         adjust_timestamp(args.input.name, args.offset)
-    if args.language:
-        logger.info("[*] Translating")
+    if args.engine and args.language:
+        ai_imports.load_ai_engine(args.engine)
+        logger.info(f"[*] Translating to {args.language} using {args.engine}")
     asyncio.run(
             translate_srt(
-                args.input.name, args.language, args.batch, args.parallel, args.ai)
+                args.input.name, args.language, args.batch, args.parallel, args.engine)
         )
 
 
@@ -98,8 +101,9 @@ async def translate_srt(
     # sort_num = sorted(list_dict, key = lambda x : x[“num”])
     # FIXME: translation[0] only gives partial results
     translations = sorted(translations, key=lambda translation: translation[0]["idx"])
-    with open("translate_srt_translate.pcl", "w") as picklefile:
-        picklefile.write(pickle.dumps(translations))
+    with open("translate_srt_translate.pcl", "wb") as picklefile:
+        pickle.dump(translations, picklefile)
+        #picklefile.write(pickle.dump(translations))
     assert len(translations) > 0, "[*] translations(sorted) are empty!"
     # translated_subtitles = [(index, timestamp, trans) for (index, timestamp, _), trans in zip(subtitles, translations)]
     # Combine subtitles with translations
@@ -130,12 +134,6 @@ async def translate_srt(
                 ofile.write("\n")
                 logger.debug(cand["msg"].lstrip().rstrip())
 
-def mock_create():
-    pass
-def mock_sample():
-    pass
-def mock_append():
-    pass
 # Process lines in batches asynchronously
 async def translate_lines(lines: list, batch_size: int, lang: str, conns: int, ai: str) -> list:
     assert conns > 0, "parallel is less than 1"
@@ -150,8 +148,7 @@ async def translate_lines(lines: list, batch_size: int, lang: str, conns: int, a
             )
             pass
         case "nullai":
-            #client = nullAI(chat=chat())
-            client = nullAI()
+            client = ai_imports.nullAI()
         case _:
             logger.critical(f"{ai} is NOT supported - Exiting!")
             sys.exit(1)
@@ -187,10 +184,10 @@ async def translate_lines(lines: list, batch_size: int, lang: str, conns: int, a
             # perhaps here is the bug ...
             translations.extend(batch_result)
     translations_pickle = "translations.pcl"
-    with open(f"{translations_pickle}","w") as picklefile:
-        picklefile.write(pickle.dumps(translations))
+    with open(f"{translations_pickle}","wb") as picklefile:
+        pickle.dump(translations, picklefile)
         logger.debug(f"picklefile written: {translations_pickle}")
-    assert len(translations) > 0, "Translations in translate_lines are less than 1"
+    #assert len(translations) > 0, "Translations in translate_lines are less than 1"
     logger.debug(f"[*] Translations in translate_lines: {len(translations)}")
     return translations
 
@@ -202,7 +199,7 @@ async def translate_batch(
         "el": "regular modern Greek",
         "il": "colloquial Greek from South-West Peloponesse region of Ilia",
         "kr": "Cretan dialect of Greek",
-        "pt": "Ponti formc Greek",
+        "pt": "Pontic form of Greek",
         "bn": "βλαχικα form of Greek",
         "cl": "Katharevousa form of Greek",
         "re": "redneck US English",
@@ -217,7 +214,7 @@ async def translate_batch(
     chat = client.chat.create(
         model="grok-4",
         messages=[
-            system(
+            ai_imports.system(
                 f"please translate to {language}, keeping text concise for subtitles so it can be copied and pasted"
             )
         ],
@@ -227,7 +224,7 @@ async def translate_batch(
     for line in lines:
         logger.debug(f"[*] Translating {line['msg']}")
         # FIXME: bug candidate
-        chat.append(user(line["msg"]))
+        chat.append(ai_imports.user(line["msg"]))
         response = await chat.sample()
         logger.debug(f"[GREPMEOUT] {line} -> {response.content}")
         line["msg"] = response.content
@@ -260,6 +257,8 @@ def parse_srt(fname: str) -> list:
                 continue
             else:
                 msgs.append(line)
+                logging.debug(len(msgs))
+                logging.debug(msgs)
     logger.debug(f"[*] srt parsed: {fname}")
     return translations
 

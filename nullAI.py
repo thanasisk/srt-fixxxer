@@ -1,4 +1,5 @@
-# --- mock_xai.py --------------------------------------------------------------
+#!/usr/bin/env python3                                                          
+# -*- coding: utf-8 -*- 
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 import asyncio
@@ -58,9 +59,6 @@ class _ChatSession:
         self.messages.append({"role": msg["role"], "content": str(msg["content"])})
 
     async def sample(self) -> ChatResponse:
-        """
-        Produce a response. Replace `_fake_translate` with your logic if needed.
-        """
         # Simulate I/O/latency in tests
         await asyncio.sleep(0)
 
@@ -80,12 +78,6 @@ class _ChatSession:
         return resp
 
 def _fake_translate(text: str, messages: List[Dict[str, str]]) -> str:
-    """
-    Replace with whatever deterministic behavior you want in tests.
-    For example, prefix with [TX], or upper-case, etc.
-    You can also read the system prompt to choose behavior.
-    """
-    # Example: keep it simple and mark that it's been "translated"
     return f"[TX] {text}"
 
 class _ChatAPI:
@@ -108,4 +100,7 @@ class nullAI:
     def __init__(self) -> None:
         self.chat = _ChatAPI()
 
-
+def user(message: str) -> dict:
+    return {"role": "user", "content": message}
+def system(message: str) -> dict:
+    return {"role": "system", "content": message}
