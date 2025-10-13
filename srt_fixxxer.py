@@ -25,27 +25,9 @@ from dateutil import parser
 from xai_sdk import AsyncClient
 from xai_sdk.chat import user, system
 
+from nullAI import nullAI
 TIMESTAMP_RE = re.compile(r"\d\d:\d\d:\d\d,\d\d\d --> \d\d:\d\d:\d\d,\d\d\d")
 logger = logging.getLogger(__name__)
-
-class nullAI:
-    def __init__(self, chat):
-        self.chat = chat
-
-class ChatResponse:
-    def __init__(self, content):
-        self.content = content
-    def append(self, extra):
-        self.content += str(extra)
-    async def sample(self):
-        return self.content
-
-class chat:
-    def __init__(self):
-        self.response = ChatResponse("FIXED RESPONSE")  # Now it's properly initialized
-
-    def create(self,model,messages,temperature):
-        return self.response
 
 def main() -> None:
     """
@@ -62,7 +44,7 @@ def main() -> None:
         required=True,
         type=argparse.FileType("r", encoding="utf-8"),
     )
-    argparser.add_argument("-l", "--language", type=str, default="el")
+    argparser.add_argument("-l", "--language", type=str, help="enters translate mode - selects language")
     argparser.add_argument(
         "-b", "--batch", type=int, default=20, help="batch size to speed up things"
     )
@@ -73,7 +55,6 @@ def main() -> None:
     argparser.add_argument("-v", "--verbose", action="store_true", help="be more verbose\ncreates pickles")
     argparser.add_argument("-q", "--quiet", action="store_true", help="reduce verbosity")
     args = argparser.parse_args()
-    # TODO: make it conditional
     if args.verbose: 
         logging.basicConfig(filename="fixxxer.log", level=logging.DEBUG)
     elif args.quiet:
@@ -169,7 +150,8 @@ async def translate_lines(lines: list, batch_size: int, lang: str, conns: int, a
             )
             pass
         case "nullai":
-            client = nullAI(chat=chat())
+            #client = nullAI(chat=chat())
+            client = nullAI()
         case _:
             logger.critical(f"{ai} is NOT supported - Exiting!")
             sys.exit(1)
