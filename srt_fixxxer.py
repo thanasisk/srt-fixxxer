@@ -139,6 +139,7 @@ async def translate_srt(
                 with open(f"translation-{idx}.pcl", "wb") as picklefile:
                     picklefile.write(pickle.dumps(translation))
             cand = translation
+            ofile.write("\n")
             ofile.write(cand["idx"])
             ofile.write("\n")
             logger.debug(cand["idx"])
