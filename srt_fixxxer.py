@@ -96,11 +96,14 @@ async def translate_srt(
     )
     assert len(translations_raw) > 0, "[*] translations_raw are empty!"
     for t_raw in translations_raw:
-        translations.append(t_raw.result())
+        translations.append(t_raw)
     # list_dict = [ { “num” =3, “name” = “A”}, {“num” = 1, “country” = “Europe”}]
     # sort_num = sorted(list_dict, key = lambda x : x[“num”])
     # FIXME: translation[0] only gives partial results
-    translations = sorted(translations, key=lambda translation: translation[0]["idx"])
+    logging.debug(f"[*] translations_raw / translations: {len(translations_raw)} {translations_raw} / {len(translations)} {translations}")
+    with open("translate_srt_translate_unsorted.pcl", "wb") as picklefile:
+        pickle.dump(translations, picklefile)
+    translations = sorted(translations, key=lambda translation: translation["idx"])
     with open("translate_srt_translate.pcl", "wb") as picklefile:
         pickle.dump(translations, picklefile)
         #picklefile.write(pickle.dump(translations))
@@ -118,21 +121,22 @@ async def translate_srt(
         output_fname = f"{stem}.{ai}.{lang}.srt"
     with open(output_fname, "w") as ofile:
         logger.info("saving new srt at {output_fname}")
-        for idx, translation in translations:
+        for idx, translation in enumerate(translations):
             # TODO: make it conditional
             with open(f"translation-{idx}.pcl", "wb") as picklefile:
                 picklefile.write(pickle.dumps(translation))
-            for cand in translation:
-                ofile.write(cand["idx"])
-                ofile.write("\n")
-                logger.debug(cand["idx"])
-                ofile.write(cand["ts"])
-                ofile.write("\n")
-                logger.debug(cand["ts"])
-                ofile.write(cand["msg"].lstrip().rstrip())
-                ofile.write("\n")
-                ofile.write("\n")
-                logger.debug(cand["msg"].lstrip().rstrip())
+            #for cand in translation:
+            cand = translation
+            ofile.write(cand["idx"])
+            ofile.write("\n")
+            logger.debug(cand["idx"])
+            ofile.write(cand["ts"])
+            ofile.write("\n")
+            logger.debug(cand["ts"])
+            ofile.write(cand["msg"].lstrip().rstrip())
+            ofile.write("\n")
+            ofile.write("\n")
+            logger.debug(cand["msg"].lstrip().rstrip())
 
 # Process lines in batches asynchronously
 async def translate_lines(lines: list, batch_size: int, lang: str, conns: int, ai: str) -> list:
@@ -177,17 +181,21 @@ async def translate_lines(lines: list, batch_size: int, lang: str, conns: int, a
     assert len(results) > 0, "translate_lines: results is less than 1"
     logger.debug(f"[*] Results: {len(results)}")
     for batch_result in results:
+        # TODO: consider rewriting with exception(
         if isinstance(batch_result, Exception):
             logger.error(f"[*] Error in batch: {batch_result}")
         else:
+            # _asyncio.Task check?
+            logging.debug(f"batch_result type: {type(batch_result)}")
             # woz: extend
-            # perhaps here is the bug ...
-            translations.extend(batch_result)
+            translations.extend(batch_result.result())
+            # trying: append
+            # translations.append(batch_result.result())
     translations_pickle = "translations.pcl"
     with open(f"{translations_pickle}","wb") as picklefile:
         pickle.dump(translations, picklefile)
         logger.debug(f"picklefile written: {translations_pickle}")
-    #assert len(translations) > 0, "Translations in translate_lines are less than 1"
+    assert len(translations) > 0, "Translations in translate_lines are less than 1"
     logger.debug(f"[*] Translations in translate_lines: {len(translations)}")
     return translations
 
@@ -247,18 +255,17 @@ def parse_srt(fname: str) -> list:
             if m:
                 ts = line
             elif line.isdigit():
-                idx = line
+                idx = line # possible bug if say character in a move says 42!
             elif line == "":
                 # this serves as our construct object-ish block
-                msgs.append("")
                 # possible bug in join - should it be "\n" or ""
-                translations.append({"ts": ts, "idx": idx, "msg": "\n".join(msgs)})
+                translate_me = {"ts": ts, "idx": idx, "msg": " ".join(msgs)}
+                logging.debug(f"translate_me: {translate_me}")
+                translations.append(translate_me)
                 msgs = []
                 continue
             else:
                 msgs.append(line)
-                logging.debug(len(msgs))
-                logging.debug(msgs)
     logger.debug(f"[*] srt parsed: {fname}")
     return translations
 
