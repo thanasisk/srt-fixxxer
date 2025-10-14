@@ -103,6 +103,7 @@ async def translate_srt(
     logging.debug(f"[*] translations_raw / translations: {len(translations_raw)} {translations_raw} / {len(translations)} {translations}")
     with open("translate_srt_translate_unsorted.pcl", "wb") as picklefile:
         pickle.dump(translations, picklefile)
+    # FIXME the last bug?
     translations = sorted(translations, key=lambda translation: translation["idx"])
     with open("translate_srt_translate.pcl", "wb") as picklefile:
         pickle.dump(translations, picklefile)
@@ -122,6 +123,7 @@ async def translate_srt(
     with open(output_fname, "w") as ofile:
         logger.info("saving new srt at {output_fname}")
         for idx, translation in enumerate(translations):
+            logging.debug(f"{idx} {translation}")
             # TODO: make it conditional
             with open(f"translation-{idx}.pcl", "wb") as picklefile:
                 picklefile.write(pickle.dumps(translation))
