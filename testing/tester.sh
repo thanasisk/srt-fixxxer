@@ -24,11 +24,12 @@ echo $cmd -i $tiny -e xai -p 12 -b 1 -l $lang -v
 # 2 lines / parallel mode
 echo $cmd -i $tiny -b 2 -p 2 -e xai -l "$lang" -v
 # 2 lines / parallel mode consumes them all
-echo $cmd -i $tiny -b 2 -p 10 -e xai -l "$lang" -v
+$cmd -i $tiny -b 2 -p 10 -e xai -l "$lang" -v
+exit
 # 5 lines / parallel mode - bigger file
 $cmd -i $small -b 5 -p 10 -e xai -l "$lang" -v
 echo indices out of order
-./gaga.py
+# ./gaga.py
 exit
 languages=(il kr pt gg tv co)
 for sample in ${samples[@]}; do

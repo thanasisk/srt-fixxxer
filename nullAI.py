@@ -1,5 +1,14 @@
-#!/usr/bin/env python3                                                          
-# -*- coding: utf-8 -*- 
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# BEST AI ENGINE EVAH!
+
+__author__ = "Athanasios Kostopoulos"
+__copyright__ = "Copyright 2025, Athanasios Kostopoulos"
+__license__ = "GPLv3"
+__version__ = "0.5"
+__maintainer__ = "Athanasios Kostopoulos"
+__email__ = "athanasios@akostopoulos.com"
+
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 import asyncio
