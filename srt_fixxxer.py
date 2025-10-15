@@ -111,6 +111,7 @@ async def translate_srt(
     translations_raw = await translate_lines(
         subtitles, batch_size=batch_sz, lang=lang, conns=conns, ai=ai
     )
+    translations_raw = set(translations_raw)
     assert len(translations_raw) > 0, "λ translations_raw are empty!"
     for t_raw in translations_raw:
         translations.append(t_raw)
@@ -230,7 +231,7 @@ async def translate_batch(
         "cl": "Katharevousa form of Greek",
         "re": "redneck US English",
         "gg": "late 80s/early 90s gangsta rap English",
-        "tv": "80s Greek slang, made infamous from VHS of the era",
+        "tv": "80s Greek slang, made infamous from VHS of the era such as  δικε μου, τη βρισκω, ,κουφαθηκα, ,ο ετσι μου, χαπατης, λουμπινα  and similar vocabulary",
         "co": "modern corporate US English",
     }
     # TODO: error checking
