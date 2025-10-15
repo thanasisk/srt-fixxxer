@@ -71,12 +71,12 @@ def main() -> None:
     argparser.add_argument("-v", "--verbose", action="store_true", help="be more verbose\ncreates pickles")
     argparser.add_argument("-q", "--quiet", action="store_true", help="reduce verbosity")
     args = argparser.parse_args()
+    lvl = logging.INFO
     if args.verbose: 
-        logging.basicConfig(filename="fixxxer.log", level=logging.DEBUG)
+        lvl = logging.DEBUG
     elif args.quiet:
-        logging.basicConfig(filename="fixxxer.log", level=logging.CRITICAL)
-    else:
-        logging.basicConfig(filename="fixxxer.log", level=logging.INFO)
+        logging.CRITICAL
+    logging.basicConfig(filename="fixxxer.log", filemode="w",level=lvl)
     console_handler = logging.StreamHandler(sys.stdout)
     logger.addHandler(console_handler)
     logger.info("Started")
@@ -111,7 +111,8 @@ async def translate_srt(
     translations_raw = await translate_lines(
         subtitles, batch_size=batch_sz, lang=lang, conns=conns, ai=ai
     )
-    translations_raw = set(translations_raw)
+
+    #translations_raw = set(translations_raw)
     assert len(translations_raw) > 0, "λ translations_raw are empty!"
     for t_raw in translations_raw:
         translations.append(t_raw)
@@ -140,7 +141,6 @@ async def translate_srt(
                 with open(f"translation-{idx}.pcl", "wb") as picklefile:
                     picklefile.write(pickle.dumps(translation))
             cand = translation
-            ofile.write("\n")
             ofile.write(cand["idx"])
             ofile.write("\n")
             logger.debug(cand["idx"])
@@ -149,6 +149,7 @@ async def translate_srt(
             logger.debug(cand["ts"])
             ofile.write(cand["msg"].lstrip().rstrip())
             logger.debug(cand["msg"].lstrip().rstrip())
+            ofile.write("\n\n")
 
 # Process lines in batches asynchronously
 async def translate_lines(lines: list, batch_size: int, lang: str, conns: int, ai: str) -> list:
@@ -224,14 +225,14 @@ async def translate_batch(
 ) -> list:
     languages = {
         "el": "regular modern Greek",
-        "il": "colloquial Greek from South-West Peloponesse region of Ilia",
+        "il": "colloquial Greek from South-West Peloponesse region of Ilia, kind of rednick Greek",
         "kr": "Cretan dialect of Greek",
         "pt": "Pontic form of Greek",
         "bn": "βλαχικα form of Greek",
         "cl": "Katharevousa form of Greek",
         "re": "redneck US English",
         "gg": "late 80s/early 90s gangsta rap English",
-        "tv": "80s Greek slang, made infamous from VHS of the era such as  δικε μου, τη βρισκω, ,κουφαθηκα, ,ο ετσι μου, χαπατης, λουμπινα  and similar vocabulary",
+        "tv": "80s Greek slang, made infamous from VHS direct-to-video moves of the era",
         "co": "modern corporate US English",
     }
     # TODO: error checking
