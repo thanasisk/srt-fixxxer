@@ -87,7 +87,7 @@ class _ChatSession:
         return resp
 
 def _fake_translate(text: str, messages: List[Dict[str, str]]) -> str:
-    return f"[TX] {text}"
+    return f"[FT] {text}"
 
 class _ChatAPI:
     """

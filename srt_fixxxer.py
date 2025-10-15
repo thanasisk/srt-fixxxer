@@ -70,16 +70,24 @@ def main() -> None:
     argparser.add_argument("-e", "--engine", type=str, help="AI provider")
     argparser.add_argument("-v", "--verbose", action="store_true", help="be more verbose\ncreates pickles")
     argparser.add_argument("-q", "--quiet", action="store_true", help="reduce verbosity")
+    argparser.add_argument("-r", "--recover", action="store_true",help="attempts a recovery from a pickled object")
     args = argparser.parse_args()
     lvl = logging.INFO
-    if args.verbose: 
+    if args.verbose:
         lvl = logging.DEBUG
     elif args.quiet:
         logging.CRITICAL
     logging.basicConfig(filename="fixxxer.log", filemode="w",level=lvl)
     console_handler = logging.StreamHandler(sys.stdout)
     logger.addHandler(console_handler)
-    logger.info("Started")
+    logger.info("λ Started")
+    if args.recover:
+        # enter recover mode
+        logger.info(f"λ Initiating recovery of {args.input.name}")
+        if recover(args.input.name):
+            logger.info(f"λ {args.args_input} recovered")
+        else:
+            logger.error(f"ε {args.input.name} failed to be recovered")
     if args.offset:
         # TODO: consider in place - for now let's drink some tee(1)
         adjust_timestamp(args.input.name, args.offset)
@@ -92,10 +100,22 @@ def main() -> None:
         )
 
 
+def recover(srt_file: str) -> bool:
+    rec_file = 'translations.pcl'
+    srt = (f"{srt_file.split(".")[:-1]}.rec.srt")
+    with open(rec_file,"rb") as ifile:
+        traws = pickle.load(ifile)
+        with open(srt,"w") as ofile:
+            for raw in traws:
+                ofile.write(f"{raw['idx']}\n")
+                ofile.write(f"{raw['ts']}\n")
+                ofile.write(f"{raw['msg']}\n\n")
+
+
 def check_srt_filename(candidate: str) -> bool:
     checkee = candidate.split(".")
     if len(checkee) < 3:
-        logger.error(f"filename {candidate} is not well formatted as *.lang.srt")
+        logger.warning(f"filename {candidate} is not well formatted as *.lang.srt")
         return False
     return True
 
@@ -106,17 +126,17 @@ async def translate_srt(
 ) -> None:
     translations = []
     subtitles = parse_srt(input_file)
-    logger.debug("λ Sending lines for translation")
+    logger.debug("Δ Sending lines for translation")
     logger.debug(f"subtitles {subtitles}")
     translations_raw = await translate_lines(
         subtitles, batch_size=batch_sz, lang=lang, conns=conns, ai=ai
     )
 
     #translations_raw = set(translations_raw)
-    assert len(translations_raw) > 0, "λ translations_raw are empty!"
+    assert len(translations_raw) > 0, "Δ translations_raw are empty!"
     for t_raw in translations_raw:
         translations.append(t_raw)
-    logger.debug(f"λ translations_raw / translations: {len(translations_raw)} {translations_raw} / {len(translations)} {translations}")
+    logger.debug(f"Δ translations_raw / translations: {len(translations_raw)} {translations_raw} / {len(translations)} {translations}")
     if logger.getEffectiveLevel() == logging.DEBUG:
         with open("translate_srt_translate_unsorted.pcl", "wb") as picklefile:
             pickle.dump(translations, picklefile)
@@ -124,7 +144,7 @@ async def translate_srt(
     if logger.getEffectiveLevel() == logging.DEBUG:
         with open("translate_srt_translate.pcl", "wb") as picklefile:
             pickle.dump(translations, picklefile)
-    assert len(translations) > 0, "λ translations(sorted) are empty!"
+    assert len(translations) > 0, "Δ translations(sorted) are empty!"
     if check_srt_filename(input_file) is False:
         logger.error(
             f"invalid input filename: {input_file} - defaulting to output.{ai}.{lang}.srt"
@@ -133,8 +153,8 @@ async def translate_srt(
     else:
         stem = "".join(input_file.split(".")[:-2])
         output_fname = f"{stem}.{ai}.{lang}.srt"
+        logger.info(f"Δ saving new srt at {output_fname}")
     with open(output_fname, "w") as ofile:
-        logger.info("saving new srt at {output_fname}")
         for idx, translation in enumerate(translations):
             logger.debug(f"{idx} {translation}")
             if logger.getEffectiveLevel() == logging.DEBUG:
@@ -170,12 +190,12 @@ async def translate_lines(lines: list, batch_size: int, lang: str, conns: int, a
             logger.critical(f"{ai} is NOT supported - Exiting!")
             sys.exit(1)
     translations = []
-    logger.debug("λ Split lines into batches")
+    logger.debug("Δ Split lines into batches")
     batches = [lines[i : i + batch_size] for i in range(0, len(lines), batch_size)]
-    logger.debug(f"λ {len(batches)} batches created")
-    logger.debug(f"batches {batches}")
+    logger.debug(f"Δ {len(batches)} batches created")
+    logger.debug(f"batches = {batches}")
     for b in batches:
-        logger.debug(f"b: {b}")
+        logger.debug(f"b = {b}")
     semaphore = asyncio.Semaphore(
         conns
     )  # Limit concurrent requests to avoid rate limits
@@ -185,20 +205,20 @@ async def translate_lines(lines: list, batch_size: int, lang: str, conns: int, a
             return await translate_batch(client, batch, lang)
 
     # Run batches concurrently
-    logger.debug("λ Creating tasks")
+    logger.debug("Δ Creating tasks")
     tasks = [process_batch(batch) for batch in batches]
-    logger.debug(f"λ Created tasks:{len(tasks)}")
+    logger.debug(f"Δ Created tasks:{len(tasks)}")
     results = []
     async with asyncio.TaskGroup() as tg:
         for task in tasks:
             results.append(tg.create_task(task))
-    logger.debug("λ Tasks completed")
+    logger.debug("Δ Tasks completed")
     assert len(results) > 0, "translate_lines: results is less than 1"
-    logger.debug(f"λ Results: {len(results)}")
+    logger.debug(f"Δ Results: {len(results)}")
     for batch_result in results:
         # TODO: consider rewriting with exception(
         if isinstance(batch_result, Exception):
-            logger.error(f"λ Error in batch: {batch_result}")
+            logger.error(f"Δ Error in batch: {batch_result}")
         else:
             # _asyncio.Task check?
             logger.debug(f"batch_result type: {type(batch_result)}")
@@ -216,7 +236,7 @@ async def translate_lines(lines: list, batch_size: int, lang: str, conns: int, a
             pickle.dump(translations, picklefile)
             logger.debug(f"picklefile written: {translations_pickle}")
     assert len(translations) > 0, "Translations in translate_lines are less than 1"
-    logger.debug(f"λ Translations in translate_lines: {len(translations)}")
+    logger.debug(f"Δ Translations in translate_lines: {len(translations)}")
     return translations
 
 
@@ -228,7 +248,7 @@ async def translate_batch(
         "il": "colloquial Greek from South-West Peloponesse region of Ilia, kind of rednick Greek",
         "kr": "Cretan dialect of Greek",
         "pt": "Pontic form of Greek",
-        "bn": "βλαχικα form of Greek",
+        "bn": "βΔαχικα form of Greek",
         "cl": "Katharevousa form of Greek",
         "re": "redneck US English",
         "gg": "late 80s/early 90s gangsta rap English",
@@ -237,8 +257,8 @@ async def translate_batch(
     }
     # TODO: error checking
     language = languages[lang]
-    logger.debug(f"λ translating batch of {len(lines)} to {language}")
-    logger.debug("λ creating chat")
+    logger.debug(f"Δ translating batch of {len(lines)} to {language}")
+    logger.debug("Δ creating chat")
     translated = []
     for line in lines:
         chat = client.chat.create(
@@ -250,7 +270,7 @@ async def translate_batch(
             ],
             temperature=0.3,  # Low temperature for precise translations
         )
-        logger.debug(f"λ Translating {line['msg']}")
+        logger.debug(f"Δ Translating {line['msg']}")
         # 1st attempt: moving create outside the loop (which should be more efficient)
         # appends messages to be translated - I had a look into the docs AND asked Grok
         # looks like for the time being I am stuck with this
@@ -260,12 +280,12 @@ async def translate_batch(
         line["msg"] = response.content
         # bug candidate
         translated.append(line)
-    logger.debug(f"λ Batch translated: {len(translated)}")
+    logger.debug(f"Δ Batch translated: {len(translated)}")
     return translated
 
 
 def parse_srt(fname: str) -> list:
-    logger.debug(f"λ Parsing {fname}")
+    logger.debug(f"Δ Parsing {fname}")
     translations = []
     with open(fname, "r") as ifile:
         ts = ""
@@ -288,7 +308,7 @@ def parse_srt(fname: str) -> list:
                 continue
             else:
                 msgs.append(line)
-    logger.debug(f"λ srt parsed: {fname}")
+    logger.debug(f"Δ srt parsed: {fname}")
     return translations
 
 

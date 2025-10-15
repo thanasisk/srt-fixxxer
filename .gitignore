@@ -211,3 +211,4 @@ __marimo__/
 *.ex
 *.pcl
 TODO
+languages.json
