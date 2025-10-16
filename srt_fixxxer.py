@@ -105,7 +105,7 @@ def main() -> None:
 def recover(srt_file: str) -> bool:
     success = False
     rec_file = 'translations.pcl'
-    srt = (f"{srt_file.split(".")[:-1]}.rec.srt")
+    srt = (f"{'.'.join(srt_file.split(".")[:-1])}.rec.srt")
     with open(rec_file,"rb") as ifile:
         try:
             traws = pickle.load(ifile)
