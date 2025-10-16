@@ -33,6 +33,7 @@ import datetime
 import asyncio
 import pickle
 import logging
+import json
 from functools import wraps # This convenience func preserves name and docstring
 
 from dateutil import parser
@@ -85,9 +86,10 @@ def main() -> None:
         # enter recover mode
         logger.info(f"λ Initiating recovery of {args.input.name}")
         if recover(args.input.name):
-            logger.info(f"λ {args.args_input} recovered")
+            logger.info(f"λ {args.input.name} recovered")
         else:
             logger.error(f"ε {args.input.name} failed to be recovered")
+        sys.exit(0)
     if args.offset:
         # TODO: consider in place - for now let's drink some tee(1)
         adjust_timestamp(args.input.name, args.offset)
@@ -101,16 +103,28 @@ def main() -> None:
 
 
 def recover(srt_file: str) -> bool:
+    success = False
     rec_file = 'translations.pcl'
     srt = (f"{srt_file.split(".")[:-1]}.rec.srt")
     with open(rec_file,"rb") as ifile:
-        traws = pickle.load(ifile)
+        try:
+            traws = pickle.load(ifile)
+        except pickle.UnpicklingError:
+            logger.error(f"ε {rec_file} appears to be corrupted")
+            return False
+        except FileNotFoundError:
+            logger.error(f"ε {rec_file} is missing?")
+            return false
+        except PermissionError:
+            logger.error(f"ε {rec_file} - you do not have pemrissions")
+            return false
         with open(srt,"w") as ofile:
             for raw in traws:
                 ofile.write(f"{raw['idx']}\n")
                 ofile.write(f"{raw['ts']}\n")
                 ofile.write(f"{raw['msg']}\n\n")
-
+        success = True
+    return success
 
 def check_srt_filename(candidate: str) -> bool:
     checkee = candidate.split(".")
@@ -243,19 +257,10 @@ async def translate_lines(lines: list, batch_size: int, lang: str, conns: int, a
 async def translate_batch(
     client, lines: list, lang: str
 ) -> list:
-    languages = {
-        "el": "regular modern Greek",
-        "il": "colloquial Greek from South-West Peloponesse region of Ilia, kind of rednick Greek",
-        "kr": "Cretan dialect of Greek",
-        "pt": "Pontic form of Greek",
-        "bn": "βΔαχικα form of Greek",
-        "cl": "Katharevousa form of Greek",
-        "re": "redneck US English",
-        "gg": "late 80s/early 90s gangsta rap English",
-        "tv": "80s Greek slang, made infamous from VHS direct-to-video moves of the era",
-        "co": "modern corporate US English",
-    }
-    # TODO: error checking
+    # TODO: error checking file stuff + json.decoder.JSONDecodeError:
+    languages  = {}
+    with open('languages.json', 'r') as lang_file:
+        languages =  json.load(lang_file)
     language = languages[lang]
     logger.debug(f"Δ translating batch of {len(lines)} to {language}")
     logger.debug("Δ creating chat")
@@ -265,7 +270,7 @@ async def translate_batch(
             model="grok-4",
             messages=[
                 ai_imports.system(
-                    f"please translate to {language}, keeping text concise for subtitles so it can be copied and pasted"
+                    f"Rewrite in {language}. Keep text as consice as needed so it can be used for subtitles \"as-is\""
                 )
             ],
             temperature=0.3,  # Low temperature for precise translations
