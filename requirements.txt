@@ -1,2 +1,2 @@
 python-dateutil>=2.9.0.post0
-xai-sdk>=1.2.0
+openai-sdk>=0.1.0

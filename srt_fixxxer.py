@@ -38,9 +38,7 @@ from functools import wraps # This convenience func preserves name and docstring
 
 from dateutil import parser
 
-from xai_sdk import AsyncClient
-#from ai_imports import load_ai_engine
-#from ai_imports import load_ai_engine, user, system, nullAI
+from openai import OpenAI
 import ai_imports
 
 TIMESTAMP_RE = re.compile(r"\d\d:\d\d:\d\d,\d\d\d --> \d\d:\d\d:\d\d,\d\d\d")
@@ -193,11 +191,23 @@ async def translate_lines(lines: list, batch_size: int, lang: str, conns: int, a
     #match ai.decode('utf-8').lower():
     match ai.lower():
         case "xai":
-            client = AsyncClient(
+            client = openai.AsyncClient(
             api_key=os.getenv("XAI"),
-            timeout=3600, # Override default timeout with longer timeout for reasoning models
+            base_url="https://api.x.ai/v1",
+            timeout=httpx.Timeout(3600.0), # Override default timeout with longer timeout for reasoning models
             )
-            pass
+        case "openai":
+            client = openai.AsyncClient(
+            api_key=os.getenv("OPENAI")
+            # baseURL is already included
+            timeout=httpx.Timeout(3600.0)
+                    )
+        case "deepseek":
+            client = openai.AsyncClient(
+            api_key=os.getenv("DEEPSEEK")
+            base_url="https://api.deepseek.com"
+            timeout=httpx.Timeout(3600.0)
+                    )
         case "nullai":
             client = ai_imports.nullAI()
         case _:
