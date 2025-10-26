@@ -91,6 +91,7 @@ def main() -> None:
     if args.offset:
         # TODO: consider in place - for now let's drink some tee(1)
         adjust_timestamp(args.input.name, args.offset)
+        sys.exit(0)
     if args.engine and args.language:
         ai_imports.load_ai_engine(args.engine)
         logger.info(f"λ Translating to {args.language} using {args.engine}")
@@ -198,16 +199,16 @@ async def translate_lines(lines: list, batch_size: int, lang: str, conns: int, a
             )
         case "openai":
             client = openai.AsyncClient(
-            api_key=os.getenv("OPENAI")
+            api_key=os.getenv("OPENAI"),
             # baseURL is already included
             timeout=httpx.Timeout(3600.0)
-                    )
+            )
         case "deepseek":
             client = openai.AsyncClient(
-            api_key=os.getenv("DEEPSEEK")
-            base_url="https://api.deepseek.com"
+            api_key=os.getenv("DEEPSEEK"),
+            base_url="https://api.deepseek.com",
             timeout=httpx.Timeout(3600.0)
-                    )
+            )
         case "nullai":
             client = ai_imports.nullAI()
         case _:
